@@ -1,0 +1,28 @@
+name: 24/7 Reviewer - Scheduled Scan
+
+# This is the "always-on" loop: it runs on its own clock, independent of
+# any pull request, and is what makes this reviewer different from
+# PR-triggered-only tools.
+on:
+  schedule:
+    - cron: "0 */4 * * *"   # every 4 hours
+  workflow_dispatch: {}       # allow manual runs from the Actions tab
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scheduled scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/scheduled_scan.py "${{ github.repository_owner }}" "${{ github.event.repository.name }}"
