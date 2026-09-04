@@ -1,4 +1,4 @@
-"""
+ """
 Webhook entrypoint. GitHub calls this on every `pull_request` event.
 This is Phase 1 (reactive core) from the plan — parity with existing
 PR-triggered reviewers. Phase 2 (the 24/7 background scan) lives in
@@ -7,6 +7,8 @@ scripts/scheduled_scan.py and runs independently on a cron schedule.
 import hashlib
 import hmac
 import logging
+import traceback
+from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException
 
@@ -20,6 +22,10 @@ from app.config import AUTO_FIX_CONFIDENCE_THRESHOLD
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("code-reviewer")
+
+# Full tracebacks always get written here, regardless of what the terminal
+# shows or scrolls away — check this file if a webhook returns a 500.
+_ERROR_LOG_PATH = Path(__file__).resolve().parent.parent / "webhook_errors.log"
 
 app = FastAPI(title="24/7 Intelligent Code Reviewer")
 
@@ -51,7 +57,17 @@ async def github_webhook(request: Request):
     payload = await request.json()
 
     if event == "pull_request" and payload.get("action") in ("opened", "synchronize", "reopened"):
-        handle_pull_request(payload)
+        try:
+            handle_pull_request(payload)
+        except Exception:
+            tb = traceback.format_exc()
+            log.error("Webhook handler failed:\n%s", tb)
+            with open(_ERROR_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write("\n" + "=" * 80 + "\n")
+                f.write(tb)
+            # Still return 200 so GitHub doesn't keep retrying, but the
+            # error is fully captured in webhook_errors.log for debugging.
+            return {"received": True, "error": "See webhook_errors.log for details"}
 
     return {"received": True}
 
