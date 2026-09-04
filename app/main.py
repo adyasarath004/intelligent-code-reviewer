@@ -1,4 +1,4 @@
- """
+"""
 Webhook entrypoint. GitHub calls this on every `pull_request` event.
 This is Phase 1 (reactive core) from the plan — parity with existing
 PR-triggered reviewers. Phase 2 (the 24/7 background scan) lives in
